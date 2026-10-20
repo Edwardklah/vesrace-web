@@ -1,0 +1,433 @@
+@import "tailwindcss";
+
+/*
+ * Vesrace design tokens
+ * ---------------------
+ * Three layers:
+ *   1. Raw scales (teal brand + ink neutrals). Mode-independent hex values.
+ *   2. Semantic tokens (--bg, --fg, --primary, --success ...). These have a
+ *      light value and a dark value. Components only ever use these.
+ *   3. Tailwind mapping (@theme inline) so classes like `bg-surface`,
+ *      `text-fg-muted` and `bg-primary` read the semantic tokens.
+ *
+ * To rebrand: edit the --teal-* scale (or point --primary* at another scale).
+ * Status colours (success/warning/danger/info) and seat states are kept
+ * separate on purpose, so organiser storefront branding can never change them.
+ */
+
+/* Dark mode is driven by a `.dark` class on <html> (set before first paint
+   by the script in layout.tsx). `.light` forces light tokens inside a dark
+   page, which the style guide uses to show both themes side by side. */
+@custom-variant dark (&:where(.dark, .dark *));
+
+:root {
+  /* ---- 1. Raw scales ------------------------------------------------- */
+  --teal-50: #f0fdfa;
+  --teal-100: #ccfbf1;
+  --teal-200: #99f6e4;
+  --teal-300: #5eead4;
+  --teal-400: #2dd4bf;
+  --teal-500: #14b8a6;
+  --teal-600: #0d9488;
+  --teal-700: #0f766e; /* brand primary */
+  --teal-800: #115e59;
+  --teal-900: #134e4a;
+  --teal-950: #042f2e;
+
+  /* Ink: cool neutrals built around the logo's #111318 */
+  --ink-0: #ffffff;
+  --ink-25: #fafafb;
+  --ink-50: #f4f5f7;
+  --ink-100: #eceef1;
+  --ink-200: #dde0e5;
+  --ink-300: #c4c8d0;
+  --ink-400: #9aa0ab;
+  --ink-500: #6e7480;
+  --ink-600: #535863;
+  --ink-700: #3b3f48;
+  --ink-800: #262930;
+  --ink-900: #181a20;
+  --ink-950: #111318; /* logo ink */
+  --ink-1000: #0a0b0e;
+
+  /* ---- Mode-independent tokens -------------------------------------- */
+  --radius-sm: 6px; /* inputs, badges, seats' labels */
+  --radius-md: 12px; /* cards, panels */
+  --radius-lg: 20px; /* sheets, dialogs */
+  --radius-full: 9999px;
+
+  /* The logo's slant, reused as a motif (date badges, image crops, bars). */
+  --slant: -12deg;
+  --slant-crop: 10%;
+}
+
+/* ---- 2. Semantic tokens: light ---------------------------------------- */
+:root,
+.light {
+  color-scheme: light;
+
+  --bg: var(--ink-0); /* page canvas */
+  --surface: var(--ink-0); /* cards */
+  --surface-muted: var(--ink-50); /* sunken areas, table headers */
+  --surface-raised: var(--ink-0); /* menus, sheets */
+  --line: var(--ink-200); /* 1px borders */
+  --line-strong: var(--ink-300);
+
+  --fg: var(--ink-950);
+  --fg-muted: var(--ink-600);
+  --fg-subtle: var(--ink-500); /* captions, placeholders (large/UI only) */
+
+  --primary: var(--teal-700);
+  --primary-hover: var(--teal-800);
+  --primary-fg: #ffffff;
+  --primary-soft: var(--teal-50);
+  --primary-soft-fg: var(--teal-800);
+  --primary-ink: var(--teal-700); /* primary-coloured text on --bg */
+
+  --success: #15803d;
+  --success-soft: #dcfce7;
+  --success-fg: #14532d;
+  --warning: #b45309;
+  --warning-soft: #fef3c7;
+  --warning-fg: #78350f;
+  --danger: #b91c1c;
+  --danger-soft: #fee2e2;
+  --danger-fg: #7f1d1d;
+  --info: #1d4ed8;
+  --info-soft: #dbeafe;
+  --info-fg: #1e3a8a;
+
+  --focus: var(--teal-600);
+
+  /* Seat states. Shape and icon also change per state (see seat.tsx). */
+  --seat-tier-1: #7c3aed; /* VIP */
+  --seat-tier-2: var(--teal-700); /* Regular */
+  --seat-tier-3: #c2410c; /* Student / Early bird */
+  --seat-selected: var(--teal-700);
+  --seat-selected-fg: #ffffff;
+  --seat-held: #b45309;
+  --seat-sold: var(--ink-300);
+  --seat-sold-fg: var(--ink-600);
+  --seat-blocked: var(--ink-500);
+  --seat-accessible: #1d4ed8;
+
+  /* Elevation: three levels only. */
+  --shadow-1: 0 1px 2px rgb(17 19 24 / 0.06), 0 1px 1px rgb(17 19 24 / 0.04);
+  --shadow-2: 0 8px 24px -6px rgb(17 19 24 / 0.14), 0 2px 6px rgb(17 19 24 / 0.06);
+  --shadow-3: 0 24px 64px -12px rgb(17 19 24 / 0.28), 0 4px 12px rgb(17 19 24 / 0.08);
+}
+
+/* ---- 2. Semantic tokens: dark ----------------------------------------- */
+.dark {
+  color-scheme: dark;
+
+  --bg: var(--ink-1000);
+  --surface: var(--ink-950);
+  --surface-muted: var(--ink-900);
+  --surface-raised: var(--ink-900);
+  --line: var(--ink-800);
+  --line-strong: var(--ink-700);
+
+  --fg: var(--ink-50);
+  --fg-muted: var(--ink-400);
+  --fg-subtle: var(--ink-500);
+
+  --primary: var(--teal-400);
+  --primary-hover: var(--teal-300);
+  --primary-fg: var(--teal-950);
+  --primary-soft: #0b2a28;
+  --primary-soft-fg: var(--teal-200);
+  --primary-ink: var(--teal-400);
+
+  --success: #4ade80;
+  --success-soft: #0b2b17;
+  --success-fg: #bbf7d0;
+  --warning: #fbbf24;
+  --warning-soft: #2e2106;
+  --warning-fg: #fde68a;
+  --danger: #f87171;
+  --danger-soft: #3a1010;
+  --danger-fg: #fecaca;
+  --info: #60a5fa;
+  --info-soft: #0f1d3d;
+  --info-fg: #bfdbfe;
+
+  --focus: var(--teal-300);
+
+  --seat-tier-1: #a78bfa;
+  --seat-tier-2: var(--teal-400);
+  --seat-tier-3: #fb923c;
+  --seat-selected: var(--teal-400);
+  --seat-selected-fg: var(--teal-950);
+  --seat-held: #fbbf24;
+  --seat-sold: var(--ink-700);
+  --seat-sold-fg: var(--ink-400);
+  --seat-blocked: var(--ink-500);
+  --seat-accessible: #60a5fa;
+
+  --shadow-1: 0 1px 2px rgb(0 0 0 / 0.5);
+  --shadow-2: 0 8px 24px -6px rgb(0 0 0 / 0.6), 0 0 0 1px rgb(255 255 255 / 0.04);
+  --shadow-3: 0 24px 64px -12px rgb(0 0 0 / 0.75), 0 0 0 1px rgb(255 255 255 / 0.06);
+}
+
+/* ---- 3. Tailwind mapping ---------------------------------------------- */
+@theme inline {
+  --font-sans: var(--font-geist), ui-sans-serif, system-ui, sans-serif;
+  --font-mono: var(--font-geist-mono), ui-monospace, monospace;
+  --font-display: var(--font-archivo), var(--font-geist), sans-serif;
+
+  --color-bg: var(--bg);
+  --color-surface: var(--surface);
+  --color-surface-muted: var(--surface-muted);
+  --color-surface-raised: var(--surface-raised);
+  --color-line: var(--line);
+  --color-line-strong: var(--line-strong);
+  --color-fg: var(--fg);
+  --color-fg-muted: var(--fg-muted);
+  --color-fg-subtle: var(--fg-subtle);
+
+  --color-primary: var(--primary);
+  --color-primary-hover: var(--primary-hover);
+  --color-primary-fg: var(--primary-fg);
+  --color-primary-soft: var(--primary-soft);
+  --color-primary-soft-fg: var(--primary-soft-fg);
+  --color-primary-ink: var(--primary-ink);
+
+  --color-success: var(--success);
+  --color-success-soft: var(--success-soft);
+  --color-success-fg: var(--success-fg);
+  --color-warning: var(--warning);
+  --color-warning-soft: var(--warning-soft);
+  --color-warning-fg: var(--warning-fg);
+  --color-danger: var(--danger);
+  --color-danger-soft: var(--danger-soft);
+  --color-danger-fg: var(--danger-fg);
+  --color-info: var(--info);
+  --color-info-soft: var(--info-soft);
+  --color-info-fg: var(--info-fg);
+  --color-focus: var(--focus);
+
+  --color-teal-50: var(--teal-50);
+  --color-teal-100: var(--teal-100);
+  --color-teal-200: var(--teal-200);
+  --color-teal-300: var(--teal-300);
+  --color-teal-400: var(--teal-400);
+  --color-teal-500: var(--teal-500);
+  --color-teal-600: var(--teal-600);
+  --color-teal-700: var(--teal-700);
+  --color-teal-800: var(--teal-800);
+  --color-teal-900: var(--teal-900);
+  --color-teal-950: var(--teal-950);
+  --color-ink-0: var(--ink-0);
+  --color-ink-50: var(--ink-50);
+  --color-ink-100: var(--ink-100);
+  --color-ink-200: var(--ink-200);
+  --color-ink-300: var(--ink-300);
+  --color-ink-400: var(--ink-400);
+  --color-ink-500: var(--ink-500);
+  --color-ink-600: var(--ink-600);
+  --color-ink-700: var(--ink-700);
+  --color-ink-800: var(--ink-800);
+  --color-ink-900: var(--ink-900);
+  --color-ink-950: var(--ink-950);
+  --color-ink-1000: var(--ink-1000);
+
+  --radius-sm: var(--radius-sm);
+  --radius-md: var(--radius-md);
+  --radius-lg: var(--radius-lg);
+
+  --shadow-e1: var(--shadow-1);
+  --shadow-e2: var(--shadow-2);
+  --shadow-e3: var(--shadow-3);
+}
+
+/* ---- Type scale -------------------------------------------------------
+ * Fluid sizes: clamp(mobile @360px, …, desktop @1440px).
+ * Display styles use Archivo (heavy, narrowed, italic) to echo the logo.
+ * Everything else uses Geist. Tabular numerals are on for prices/tables. */
+@utility text-display-xl {
+  font-family: var(--font-display);
+  font-size: clamp(2.75rem, 1.83rem + 4.07vw, 5.5rem); /* 44 → 88 */
+  line-height: 0.92;
+  font-weight: 850;
+  font-style: italic;
+  font-variation-settings: "wdth" 84;
+  letter-spacing: -0.025em;
+}
+@utility text-display {
+  font-family: var(--font-display);
+  font-size: clamp(2.25rem, 1.58rem + 2.96vw, 4rem); /* 36 → 64 */
+  line-height: 0.95;
+  font-weight: 850;
+  font-style: italic;
+  font-variation-settings: "wdth" 86;
+  letter-spacing: -0.02em;
+}
+@utility text-h1 {
+  font-family: var(--font-display);
+  font-size: clamp(1.875rem, 1.6rem + 1.11vw, 2.5rem); /* 30 → 40 */
+  line-height: 1.05;
+  font-weight: 800;
+  font-variation-settings: "wdth" 90;
+  letter-spacing: -0.015em;
+}
+@utility text-h2 {
+  font-family: var(--font-sans);
+  font-size: clamp(1.5rem, 1.38rem + 0.56vw, 1.875rem); /* 24 → 30 */
+  line-height: 1.15;
+  font-weight: 650;
+  letter-spacing: -0.02em;
+}
+@utility text-h3 {
+  font-family: var(--font-sans);
+  font-size: clamp(1.125rem, 1.08rem + 0.19vw, 1.25rem); /* 18 → 20 */
+  line-height: 1.3;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+}
+@utility text-body-lg {
+  font-size: 1.125rem;
+  line-height: 1.6;
+}
+@utility text-body {
+  font-size: 1rem;
+  line-height: 1.55;
+}
+@utility text-small {
+  font-size: 0.875rem;
+  line-height: 1.45;
+}
+@utility text-caption {
+  font-size: 0.75rem;
+  line-height: 1.35;
+  font-weight: 500;
+  letter-spacing: 0.01em;
+}
+@utility text-overline {
+  font-size: 0.6875rem;
+  line-height: 1.2;
+  font-weight: 600;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+@utility tabular {
+  font-variant-numeric: tabular-nums;
+}
+
+/* The logo's slant as a reusable shape. */
+@utility slant-box {
+  transform: skewX(var(--slant));
+}
+@utility unslant {
+  transform: skewX(calc(var(--slant) * -1));
+}
+@utility crop-slant {
+  clip-path: polygon(0 0, 100% 0, 100% calc(100% - var(--slant-crop)), 0 100%);
+}
+
+/* ---- Base ------------------------------------------------------------- */
+@layer base {
+  html {
+    background: var(--bg);
+    color: var(--fg);
+    -webkit-tap-highlight-color: transparent;
+    text-rendering: optimizeLegibility;
+  }
+  body {
+    font-family: var(--font-sans);
+    background: var(--bg);
+    color: var(--fg);
+  }
+  /* One visible focus ring everywhere, keyboard only. */
+  :focus-visible {
+    outline: 2px solid var(--focus);
+    outline-offset: 2px;
+    border-radius: 4px;
+  }
+  ::selection {
+    background: var(--teal-200);
+    color: var(--teal-950);
+  }
+}
+
+
+/* ---- CSS entrance animations -----------------------------------------
+ * Used where content must be visible before JavaScript loads (the hero).
+ * The easing approximates our `smooth` spring: fast start, soft landing. */
+@keyframes vs-rise {
+  from {
+    opacity: 0;
+    transform: translateY(var(--rise, 0.4em));
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+@keyframes vs-settle {
+  from {
+    transform: scale(1.08);
+  }
+  to {
+    transform: scale(1);
+  }
+}
+@keyframes vs-fade {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+.animate-rise {
+  animation: vs-rise 750ms cubic-bezier(0.16, 1, 0.3, 1) var(--delay, 0ms) both;
+}
+.animate-settle {
+  animation: vs-settle 1800ms cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+/* ---- Frosted glass, with a lite fallback --------------------------------
+ * `.lite` is set on <html> before first paint (layout.tsx) when the device
+ * looks low-powered or Data Saver is on. Those devices get a solid bar. */
+.glass {
+  background: color-mix(in srgb, var(--bg) 85%, transparent);
+  -webkit-backdrop-filter: blur(12px);
+  backdrop-filter: blur(12px);
+}
+.lite .glass {
+  background: var(--bg);
+  -webkit-backdrop-filter: none;
+  backdrop-filter: none;
+}
+
+@media (prefers-reduced-transparency: reduce) {
+  .glass {
+    background: var(--bg);
+    -webkit-backdrop-filter: none;
+    backdrop-filter: none;
+  }
+}
+
+/* Smooth theme change without animating every hover. */
+.theme-transition,
+.theme-transition * {
+  transition:
+    background-color 300ms ease,
+    border-color 300ms ease,
+    color 300ms ease,
+    fill 300ms ease !important;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .theme-transition,
+  .theme-transition * {
+    transition: none !important;
+  }
+  .animate-rise {
+    animation-name: vs-fade;
+  }
+  .animate-settle {
+    animation: none;
+  }
+}
