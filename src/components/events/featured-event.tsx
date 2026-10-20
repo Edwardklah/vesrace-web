@@ -1,6 +1,8 @@
 "use client";
 
+import { ViewTransition } from "react";
 import Image from "next/image";
+import Link from "next/link";
 import { m } from "motion/react";
 import { ArrowRight, MapPin, Ticket } from "lucide-react";
 import { cn } from "@/lib/cn";
@@ -8,6 +10,7 @@ import { formatEventDate, formatPriceFrom } from "@/lib/format";
 import { pressScale, spring } from "@/lib/motion";
 import type { EventSummary } from "@/lib/types";
 import { DateBadge } from "./date-badge";
+import { eventMediaName } from "@/lib/transitions";
 import { FallbackCover } from "./fallback-cover";
 
 /**
@@ -25,6 +28,7 @@ export function FeaturedEvent({ event, className }: { event: EventSummary; class
         className,
       )}
     >
+      <ViewTransition name={eventMediaName(event.id)} share="morph" default="none">
       <div className="absolute inset-0 -z-20">
         <m.div className="absolute inset-0" variants={{ hover: { scale: 1.04 } }} transition={spring.smooth}>
           {event.imageUrl ? (
@@ -47,6 +51,7 @@ export function FeaturedEvent({ event, className }: { event: EventSummary; class
           )}
         </m.div>
       </div>
+      </ViewTransition>
       <div className="absolute inset-0 -z-10 bg-linear-to-t from-ink-1000/90 via-ink-1000/40 to-transparent" aria-hidden />
 
       <DateBadge iso={event.startsAt} timeZone={event.timeZone} className="absolute top-5 right-5 scale-110" />
@@ -54,9 +59,13 @@ export function FeaturedEvent({ event, className }: { event: EventSummary; class
       <div className="p-6 md:p-8">
         <p className="text-overline text-teal-300">Featured · {event.category}</p>
         <h3 className="mt-3 max-w-xl text-display text-balance">
-          <a href={`/events/${event.slug}`} className="after:absolute after:inset-0 focus-visible:outline-none">
+          <Link
+            href={`/events/${event.slug}`}
+            transitionTypes={["nav-forward"]}
+            className="after:absolute after:inset-0 focus-visible:outline-none"
+          >
             {event.name}
-          </a>
+          </Link>
         </h3>
         <div className="mt-4 flex flex-wrap items-center gap-x-5 gap-y-1 text-small text-white/80">
           <span className="tabular">{formatEventDate(event.startsAt, event.timeZone)}</span>

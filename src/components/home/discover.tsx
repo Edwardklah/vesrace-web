@@ -103,6 +103,9 @@ export function Discover({ events, weekend, featured, cities, categories }: Disc
     .sort((a, b) => a.startsAt.localeCompare(b.startsAt))
     .slice(0, 4);
 
+  // Events already shown in "This weekend" or "Featured".
+  const shownAbove = new Set([...weekend, ...featured.slice(0, 3)].map((e) => e.id));
+
   const countByCategory = (c: EventCategory) => events.filter((e) => e.category === c).length;
 
   return (
@@ -367,7 +370,8 @@ export function Discover({ events, weekend, featured, cities, categories }: Disc
                     ) : (
                       upcomingInCity.map((e) => (
                         <li key={e.id}>
-                          <EventCard event={e} />
+                          {/* Events already shown above keep the morph there, so names stay unique. */}
+                          <EventCard event={e} morph={!shownAbove.has(e.id)} />
                         </li>
                       ))
                     )}

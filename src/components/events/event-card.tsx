@@ -1,11 +1,14 @@
 "use client";
 
+import { ViewTransition } from "react";
 import Image from "next/image";
+import Link from "next/link";
 import { m } from "motion/react";
 import { CalendarClock, Flame, MapPin, Timer, Zap } from "lucide-react";
 import { cn } from "@/lib/cn";
 import { formatEventDate, formatPriceFrom } from "@/lib/format";
 import { pressScale, spring } from "@/lib/motion";
+import { eventMediaName } from "@/lib/transitions";
 import type { EventSummary, UrgencyLabel } from "@/lib/types";
 import { DateBadge } from "./date-badge";
 import { FallbackCover } from "./fallback-cover";
@@ -38,14 +41,26 @@ export interface EventCardProps {
   className?: string;
   /** Pass true for the first few cards on a page so they load immediately. */
   priority?: boolean;
+  /**
+   * Whether this card's photo morphs into the event page hero when opened.
+   * Only one card per event may have it on a page (names must be unique),
+   * so pass false for repeats of the same event further down.
+   */
+  morph?: boolean;
 }
 
 /**
  * Event card: image-led, slanted bottom crop, date badge sitting on the
- * slant. (The card-to-hero shared-element transition is added with the
- * event detail page.)
+ * slant. Opening it morphs the photo into the event page hero, using
+ * React's <ViewTransition> (browsers without support just switch pages).
  */
-export function EventCard({ event, href = `/events/${event.slug}`, className, priority }: EventCardProps) {
+export function EventCard({
+  event,
+  href = `/events/${event.slug}`,
+  className,
+  priority,
+  morph = true,
+}: EventCardProps) {
   const soldOut = event.status === "Sold out";
   const price = soldOut ? "Sold out" : formatPriceFrom(event.prices);
 
@@ -57,6 +72,7 @@ export function EventCard({ event, href = `/events/${event.slug}`, className, pr
       className={cn("group relative flex flex-col", className)}
     >
       <div className="relative">
+        <ViewTransition name={morph ? eventMediaName(event.id) : undefined} share="morph" default="none">
         <div
           className="crop-slant relative aspect-[4/3] overflow-hidden rounded-t-md bg-surface-muted dark:after:pointer-events-none dark:after:absolute dark:after:inset-0 dark:after:rounded-t-md dark:after:ring-1 dark:after:ring-white/8 dark:after:ring-inset"
         >
@@ -86,6 +102,7 @@ export function EventCard({ event, href = `/events/${event.slug}`, className, pr
           </m.div>
           {soldOut && <div className="absolute inset-0 bg-ink-1000/45" aria-hidden />}
         </div>
+        </ViewTransition>
 
         <DateBadge
           iso={event.startsAt}
@@ -102,9 +119,13 @@ export function EventCard({ event, href = `/events/${event.slug}`, className, pr
 
         <h3 className="text-h3 text-balance">
           {/* The whole card is clickable via this stretched link. */}
-          <a href={href} className="after:absolute after:inset-0 focus-visible:outline-none">
+          <Link
+            href={href}
+            transitionTypes={["nav-forward"]}
+            className="after:absolute after:inset-0 focus-visible:outline-none"
+          >
             {event.name}
-          </a>
+          </Link>
         </h3>
 
         <p className="text-small text-fg-muted tabular">

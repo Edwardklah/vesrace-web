@@ -409,6 +409,34 @@
   }
 }
 
+
+/* ---- Page transitions ---------------------------------------------------
+ * `.morph` is the card photo growing into the event page hero (React
+ * <ViewTransition share="morph">). Timing approximates our `hero` spring. */
+::view-transition-group(.morph) {
+  animation-duration: 520ms;
+  animation-timing-function: cubic-bezier(0.2, 0.9, 0.25, 1);
+}
+::view-transition-image-pair(.morph) {
+  animation-name: vs-morph-soften;
+}
+@keyframes vs-morph-soften {
+  35% {
+    filter: blur(2px);
+  }
+}
+::view-transition-old(root),
+::view-transition-new(root) {
+  animation-duration: 260ms;
+}
+@media (prefers-reduced-motion: reduce) {
+  ::view-transition-group(*),
+  ::view-transition-old(*),
+  ::view-transition-new(*) {
+    animation: none !important;
+  }
+}
+
 /* Smooth theme change without animating every hover. */
 .theme-transition,
 .theme-transition * {

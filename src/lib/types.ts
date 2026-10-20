@@ -53,6 +53,38 @@ export interface EventSummary {
   organiserName: string;
 }
 
+/**
+ * A ticket type as the API would return it. The server is the authority on
+ * price, availability and limits; the page only displays them.
+ */
+export interface TicketType {
+  id: string;
+  name: string;
+  /** Short list of what this ticket includes. */
+  includes: string[];
+  price: Money;
+  /** Tickets left. null = plenty (the API chose not to reveal a number). */
+  remaining: number | null;
+  /** Most a single order may contain. */
+  maxPerOrder: number;
+  /** e.g. "Sales end Fri 13 Nov". Shown as a warning when present. */
+  salesEndText?: string;
+  /** For seated events: which price tier colour this ticket uses on the map. */
+  tier?: PriceTier;
+}
+
+export interface EventDetail extends EventSummary {
+  description: string[];
+  /** Practical notes: doors, age limit, dress code, parking. */
+  goodToKnow: { label: string; value: string }[];
+  address: string;
+  endsAt: string;
+  ticketTypes: TicketType[];
+  /** Flat platform fee per paid ticket, paid by the customer. */
+  bookingFeePerTicket: Money;
+  organiser: { name: string; about: string; eventsHosted: number };
+}
+
 export type SeatState =
   | "available"
   | "selected"
