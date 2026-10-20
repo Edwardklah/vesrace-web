@@ -106,7 +106,8 @@ export function Discover({ events, weekend, featured, cities, categories }: Disc
   // Events already shown in "This weekend" or "Featured".
   const shownAbove = new Set([...weekend, ...featured.slice(0, 3)].map((e) => e.id));
 
-  const countByCategory = (c: EventCategory) => events.filter((e) => e.category === c).length;
+  // Counts are "things you can go to": cancelled events still appear in lists (so ticket holders find the notice) but don't count.
+  const countByCategory = (c: EventCategory) => events.filter((e) => e.category === c && e.status !== "Cancelled").length;
 
   return (
     <div id="discover" className="relative z-10 scroll-mt-20">
@@ -116,7 +117,7 @@ export function Discover({ events, weekend, featured, cities, categories }: Disc
         <form
           role="search"
           onSubmit={(e) => e.preventDefault()}
-          className="animate-rise rounded-lg border border-line bg-surface-raised p-3 shadow-e3 [--delay:450ms] [--rise:24px] md:p-4"
+          className="animate-rise relative z-20 rounded-lg border border-line bg-surface-raised p-3 shadow-e3 [--delay:450ms] [--rise:24px] md:p-4"
         >
           <div className="flex flex-col gap-2 md:flex-row">
             <label className="relative flex-1">

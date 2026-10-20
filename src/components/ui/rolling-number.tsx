@@ -13,16 +13,19 @@ export function RollingNumber({
   value,
   direction = 1,
   className,
+  live = true,
 }: {
   value: string;
   /** 1 = value went up, -1 = went down. */
   direction?: 1 | -1;
   className?: string;
+  /** Announce changes to screen readers. Turn off for values that tick every second. */
+  live?: boolean;
 }) {
   // Align from the right so units/pesewas stay put as digits are added.
   const chars = value.split("");
   return (
-    <span className={cn("inline-flex overflow-hidden tabular", className)} aria-live="polite">
+    <span className={cn("inline-flex overflow-hidden tabular", className)} aria-live={live ? "polite" : undefined}>
       <span className="sr-only">{value}</span>
       <span aria-hidden className="inline-flex">
         {chars.map((ch, i) => {

@@ -62,6 +62,9 @@ export function FeaturedEvent({ event, className }: { event: EventSummary; class
           <Link
             href={`/events/${event.slug}`}
             transitionTypes={["nav-forward"]}
+            // Load the event page ahead of the tap, so it opens instantly
+            // and the photo can morph into the hero.
+            prefetch
             className="after:absolute after:inset-0 focus-visible:outline-none"
           >
             {event.name}

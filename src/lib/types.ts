@@ -51,6 +51,22 @@ export interface EventSummary {
   status: EventDisplayStatus;
   urgency?: UrgencyLabel;
   organiserName: string;
+  /**
+   * Whether tickets can be bought right now, as decided by the server at
+   * request time (sales window + status). The page never works this out
+   * from the clock itself. Defaults to "open".
+   */
+  salesState?: "open" | "upcoming" | "closed";
+  /** When sales open, for "upcoming" events (ISO 8601). */
+  salesStartsAt?: string;
+  /** Organiser announcement shown on the event: rescheduled, venue change, cancelled. */
+  notice?: EventNotice;
+}
+
+export interface EventNotice {
+  kind: "rescheduled" | "venue-changed" | "cancelled";
+  title: string;
+  body: string;
 }
 
 /**
@@ -82,6 +98,8 @@ export interface EventDetail extends EventSummary {
   ticketTypes: TicketType[];
   /** Flat platform fee per paid ticket, paid by the customer. */
   bookingFeePerTicket: Money;
+  /** Most tickets one order may contain across all ticket types (server enforced). */
+  maxTicketsPerOrder: number;
   organiser: { name: string; about: string; eventsHosted: number };
 }
 
@@ -93,3 +111,52 @@ export type SeatState =
   | "blocked";
 
 export type PriceTier = 1 | 2 | 3;
+
+/* ---- Seat maps -----------------------------------------------------------
+ * Coordinates are in map units (one seat is about 24 units across). The map
+ * is drawn once from this data; only seat states change while choosing. */
+
+export interface MapSeat {
+  id: string; // "C-C-12" = block C, row C, seat 12
+  number: number;
+  x: number;
+  y: number;
+  state: Exclude<SeatState, "selected">; // "selected" is this customer's, held in the page
+  ticketTypeId: string;
+  tier: PriceTier;
+  accessible?: boolean;
+}
+
+export interface MapRow {
+  label: string; // "A", "B", …
+  seats: MapSeat[];
+}
+
+export interface MapSection {
+  id: string;
+  name: string; // "Centre block"
+  labelX: number;
+  labelY: number;
+  rows: MapRow[];
+}
+
+/** A standing / general-admission area drawn on the same map. */
+export interface MapZone {
+  id: string;
+  name: string;
+  ticketTypeId: string;
+  remaining: number;
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+}
+
+export interface SeatMap {
+  eventId: string;
+  width: number;
+  height: number;
+  stage: { label: string; x: number; y: number; width: number; height: number };
+  sections: MapSection[];
+  zones: MapZone[];
+}

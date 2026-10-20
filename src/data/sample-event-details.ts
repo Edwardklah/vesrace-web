@@ -11,7 +11,9 @@ import { sampleEvents } from "./sample-events";
 const GHS = (cedis: number) => ({ amountMinor: cedis * 100, currency: "GHS" as const });
 const BOOKING_FEE = GHS(5); // proposed flat fee per paid ticket
 
-type Detail = Omit<EventDetail, keyof (typeof sampleEvents)[number]>;
+type Detail = Omit<EventDetail, keyof (typeof sampleEvents)[number] | "maxTicketsPerOrder"> & {
+  maxTicketsPerOrder?: number;
+};
 
 const details: Record<string, Detail> = {
   evt_sundown_labadi: {
@@ -67,7 +69,7 @@ const details: Record<string, Detail> = {
     ],
     ticketTypes: [
       { id: "tt_ad_prem", name: "Premium", includes: ["Rows A–F, centre", "Programme included"], price: GHS(200), remaining: 9, maxPerOrder: 6, tier: 1 },
-      { id: "tt_ad_std", name: "Standard", includes: ["Rows G–T"], price: GHS(80), remaining: null, maxPerOrder: 10, tier: 2 },
+      { id: "tt_ad_std", name: "Standard", includes: ["Rows G–O"], price: GHS(80), remaining: null, maxPerOrder: 10, tier: 2 },
     ],
     bookingFeePerTicket: BOOKING_FEE,
     organiser: { name: "Kente Stage Company", about: "Traditional dance and drama, staged for today's audiences.", eventsHosted: 21 },
@@ -105,7 +107,8 @@ const details: Record<string, Detail> = {
     ],
     ticketTypes: [
       { id: "tt_hm_vip", name: "VIP", includes: ["Rows A–D", "Meet-and-greet after the show", "Lanyard"], price: GHS(500), remaining: 14, maxPerOrder: 4, tier: 1 },
-      { id: "tt_hm_reg", name: "Regular", includes: ["Rows E–T"], price: GHS(200), remaining: 214, maxPerOrder: 8, tier: 2 },
+      { id: "tt_hm_reg", name: "Regular", includes: ["Rows E–U"], price: GHS(200), remaining: 214, maxPerOrder: 8, tier: 2 },
+      { id: "tt_hm_std", name: "Standing", includes: ["Standing area at the back of the hall"], price: GHS(200), remaining: 40, maxPerOrder: 8, tier: 3 },
     ],
     bookingFeePerTicket: BOOKING_FEE,
     organiser: { name: "Coastline Live", about: "Open-air concerts and festivals along Ghana's coast since 2019.", eventsHosted: 34 },
@@ -160,7 +163,7 @@ const details: Record<string, Detail> = {
     ],
     ticketTypes: [
       { id: "tt_lc_front", name: "Front rows", includes: ["Rows A–C", "Priority entry"], price: GHS(250), remaining: 6, maxPerOrder: 4, tier: 1 },
-      { id: "tt_lc_std", name: "Standard", includes: ["Rows D–Q"], price: GHS(120), remaining: null, maxPerOrder: 8, tier: 2 },
+      { id: "tt_lc_std", name: "Standard", includes: ["Rows D–R"], price: GHS(120), remaining: null, maxPerOrder: 8, tier: 2 },
     ],
     bookingFeePerTicket: BOOKING_FEE,
     organiser: { name: "Fante Funnybones", about: "Comedy nights across the Central Region.", eventsHosted: 15 },
@@ -198,13 +201,49 @@ const details: Record<string, Detail> = {
     bookingFeePerTicket: BOOKING_FEE,
     organiser: { name: "Western Strings", about: "Acoustic music nights in the Western Region.", eventsHosted: 7 },
   },
+  evt_jazz_takoradi: {
+    endsAt: "2026-11-28T23:30:00Z",
+    address: "Harbour Club, Harbour Road, Takoradi",
+    description: [
+      "A late-night jazz session by the harbour: a quartet from Accra, guest vocalists and the house band from Takoradi, playing standards and Ghanaian jazz.",
+      "Tickets go on sale on Friday 30 October at 10:00 AM.",
+    ],
+    goodToKnow: [
+      { label: "Doors", value: "7:00 PM" },
+      { label: "Age", value: "18+" },
+    ],
+    ticketTypes: [
+      { id: "tt_jz_ga", name: "General", includes: ["Entry", "Standing and bar seating"], price: GHS(180), remaining: null, maxPerOrder: 6 },
+      { id: "tt_jz_table", name: "Table seat", includes: ["Reserved table seat", "One drink"], price: GHS(300), remaining: 48, maxPerOrder: 4 },
+    ],
+    bookingFeePerTicket: BOOKING_FEE,
+    organiser: { name: "Western Strings", about: "Acoustic music nights in the Western Region.", eventsHosted: 7 },
+  },
+  evt_tema_food: {
+    endsAt: "2026-11-14T22:00:00Z",
+    address: "Community 1 Park, Tema",
+    description: ["An afternoon and evening of street food, local brews and live DJs in Community 1 Park."],
+    goodToKnow: [{ label: "Refunds", value: "Automatic, to the way you paid, within 5 working days" }],
+    ticketTypes: [
+      { id: "tt_tf_ga", name: "Entry", includes: ["Entry", "One food voucher"], price: GHS(70), remaining: null, maxPerOrder: 8 },
+    ],
+    bookingFeePerTicket: BOOKING_FEE,
+    organiser: { name: "Harbour City Events", about: "Festivals and markets in Greater Accra.", eventsHosted: 5 },
+  },
 };
+
+const DEFAULT_ORDER_CAP = 10;
 
 export function getEventBySlug(slug: string): EventDetail | null {
   const summary = sampleEvents.find((e) => e.slug === slug);
   if (!summary) return null;
   const detail = details[summary.id];
-  return detail ? { ...summary, ...detail } : null;
+  return detail ? { maxTicketsPerOrder: DEFAULT_ORDER_CAP, ...summary, ...detail } : null;
+}
+
+export function getEventById(id: string): EventDetail | null {
+  const summary = sampleEvents.find((e) => e.id === id);
+  return summary ? getEventBySlug(summary.slug) : null;
 }
 
 export function getAllEventSlugs() {
@@ -213,7 +252,7 @@ export function getAllEventSlugs() {
 
 /** Up to `n` other events, same category first, then same city. */
 export function getRelatedEvents(event: EventDetail, n = 4) {
-  const others = sampleEvents.filter((e) => e.id !== event.id && e.status !== "Sold out");
+  const others = sampleEvents.filter((e) => e.id !== event.id && e.status !== "Sold out" && e.status !== "Cancelled");
   const score = (e: (typeof others)[number]) =>
     (e.category === event.category ? 2 : 0) + (e.city === event.city ? 1 : 0);
   return [...others].sort((a, b) => score(b) - score(a) || a.startsAt.localeCompare(b.startsAt)).slice(0, n);

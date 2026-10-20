@@ -1,3 +1,4 @@
+import { Suspense } from "react";
 import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 import { BadgeCheck, CalendarDays, Clock, ExternalLink, MapPin } from "lucide-react";
@@ -36,7 +37,46 @@ function longDate(iso: string, timeZone: string) {
   return new Intl.DateTimeFormat("en-GB", { timeZone, weekday: "long", day: "numeric", month: "long", year: "numeric" }).format(new Date(iso));
 }
 
-export default async function EventPage({ params }: PageProps<"/events/[slug]">) {
+/**
+ * The page itself renders instantly: header and a skeleton are the static
+ * shell, and the event content streams in once the URL's slug is read
+ * (inside <Suspense>, as Next.js recommends for instant navigation).
+ * Cards prefetch their event, so in practice the content is already there
+ * and the photo morph plays.
+ */
+export default function EventPage({ params }: PageProps<"/events/[slug]">) {
+  return (
+    <>
+      <SiteHeader overHero />
+      <Suspense fallback={<EventSkeleton />}>
+        <EventContent params={params} />
+      </Suspense>
+      <SiteFooter />
+    </>
+  );
+}
+
+function EventSkeleton() {
+  return (
+    <main aria-busy="true" aria-label="Loading event">
+      <div className="crop-slant h-[26rem] animate-pulse bg-ink-900 [--slant-crop:2.5rem] md:h-[34rem] md:[--slant-crop:5rem]" />
+      <div className="mx-auto grid max-w-7xl gap-10 px-4 pt-10 pb-20 md:px-8 lg:grid-cols-[minmax(0,1fr)_23rem]">
+        <div className="grid content-start gap-4">
+          <div className="grid gap-4 sm:grid-cols-2">
+            <div className="h-28 animate-pulse rounded-lg bg-surface-muted" />
+            <div className="h-28 animate-pulse rounded-lg bg-surface-muted" />
+          </div>
+          <div className="mt-8 h-10 w-40 animate-pulse rounded-md bg-surface-muted" />
+          <div className="h-32 animate-pulse rounded-lg bg-surface-muted" />
+          <div className="h-32 animate-pulse rounded-lg bg-surface-muted" />
+        </div>
+        <div className="hidden h-80 animate-pulse rounded-lg bg-surface-muted lg:block" />
+      </div>
+    </main>
+  );
+}
+
+async function EventContent({ params }: { params: PageProps<"/events/[slug]">["params"] }) {
   const { slug } = await params;
   const event = getEventBySlug(slug);
   if (!event) notFound();
@@ -140,7 +180,6 @@ export default async function EventPage({ params }: PageProps<"/events/[slug]">)
 
   return (
     <>
-      <SiteHeader overHero />
       <main>
         <EventHero event={event} />
         <TicketPurchase event={event} before={facts} after={info} />
@@ -163,7 +202,6 @@ export default async function EventPage({ params }: PageProps<"/events/[slug]">)
           </section>
         )}
       </main>
-      <SiteFooter />
     </>
   );
 }

@@ -6,12 +6,15 @@ import Link from "next/link";
 import { m } from "motion/react";
 import { CalendarClock, Flame, MapPin, Timer, Zap } from "lucide-react";
 import { cn } from "@/lib/cn";
-import { formatEventDate, formatPriceFrom } from "@/lib/format";
+import { eventDateParts, formatEventDate, formatPriceFrom } from "@/lib/format";
 import { pressScale, spring } from "@/lib/motion";
 import { eventMediaName } from "@/lib/transitions";
 import type { EventSummary, UrgencyLabel } from "@/lib/types";
 import { DateBadge } from "./date-badge";
 import { FallbackCover } from "./fallback-cover";
+
+const shortMonth = (iso: string, timeZone: string) =>
+  new Intl.DateTimeFormat("en-GB", { timeZone, month: "short" }).format(new Date(iso));
 
 function Urgency({ urgency }: { urgency: UrgencyLabel }) {
   const map = {
@@ -62,7 +65,19 @@ export function EventCard({
   morph = true,
 }: EventCardProps) {
   const soldOut = event.status === "Sold out";
-  const price = soldOut ? "Sold out" : formatPriceFrom(event.prices);
+  const cancelled = event.status === "Cancelled" || event.notice?.kind === "cancelled";
+  const upcoming = event.salesState === "upcoming";
+  const unavailable = soldOut || cancelled;
+  // What the price line says, in order of importance.
+  const price = cancelled
+    ? "Cancelled"
+    : soldOut
+      ? "Sold out"
+      : upcoming && event.salesStartsAt
+        ? `On sale ${eventDateParts(event.salesStartsAt, event.timeZone).day} ${shortMonth(event.salesStartsAt, event.timeZone)} · ${formatPriceFrom(event.prices)}`
+        : event.salesState === "closed"
+          ? "Sales ended"
+          : formatPriceFrom(event.prices);
 
   return (
     <m.article
@@ -100,7 +115,7 @@ export function EventCard({
               />
             )}
           </m.div>
-          {soldOut && <div className="absolute inset-0 bg-ink-1000/45" aria-hidden />}
+          {unavailable && <div className="absolute inset-0 bg-ink-1000/45" aria-hidden />}
         </div>
         </ViewTransition>
 
@@ -114,7 +129,13 @@ export function EventCard({
       <div className="flex flex-1 flex-col gap-2 pt-3 pr-20">
         <div className="flex flex-wrap items-center gap-2">
           <span className="text-overline text-primary-ink">{event.category}</span>
-          {event.urgency && !soldOut && <Urgency urgency={event.urgency} />}
+          {event.urgency && !unavailable && <Urgency urgency={event.urgency} />}
+          {event.notice?.kind === "rescheduled" && (
+            <span className="inline-flex items-center gap-1 rounded-sm bg-info-soft px-1.5 py-0.5 text-caption font-semibold text-info-fg">
+              <CalendarClock className="size-3.5" aria-hidden strokeWidth={2.25} />
+              Rescheduled
+            </span>
+          )}
         </div>
 
         <h3 className="text-h3 text-balance">
@@ -122,6 +143,9 @@ export function EventCard({
           <Link
             href={href}
             transitionTypes={["nav-forward"]}
+            // Load the event page ahead of the tap, so it opens instantly
+            // and the photo can morph into the hero.
+            prefetch
             className="after:absolute after:inset-0 focus-visible:outline-none"
           >
             {event.name}
@@ -140,7 +164,7 @@ export function EventCard({
       <p
         className={cn(
           "mt-3 text-body font-semibold tabular",
-          soldOut ? "text-fg-muted" : "text-fg",
+          cancelled ? "text-danger" : soldOut || event.salesState === "closed" ? "text-fg-muted" : upcoming ? "text-primary-ink" : "text-fg",
         )}
       >
         {price}

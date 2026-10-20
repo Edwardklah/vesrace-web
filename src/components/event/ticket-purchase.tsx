@@ -1,19 +1,25 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import Link from "next/link";
 import { AnimatePresence, m, useAnimationControls } from "motion/react";
 import {
   Armchair,
   ArrowRight,
   Ban,
+  Bell,
+  BellRing,
   CalendarClock,
+  CalendarX2,
   Check,
   CircleCheck,
   Flame,
   Info,
   Lock,
+  MapPinned,
   Smartphone,
+  Ticket,
+  WifiOff,
 } from "lucide-react";
 import { Seat } from "@/components/seating/seat";
 import { Button } from "@/components/ui/button";
@@ -22,7 +28,8 @@ import { Stepper } from "@/components/ui/stepper";
 import { cn } from "@/lib/cn";
 import { formatEventDate, formatMoney, formatPriceFrom, type Money } from "@/lib/format";
 import { spring } from "@/lib/motion";
-import type { EventDetail, TicketType } from "@/lib/types";
+import type { EventDetail, EventNotice, TicketType } from "@/lib/types";
+import { useOnline } from "@/lib/use-online";
 
 const FEW_LEFT = 20;
 
@@ -40,6 +47,64 @@ const toneClass = {
   warning: "text-warning",
   danger: "text-danger",
 } as const;
+
+/** "Fri 30 Oct, 10:00 AM" in the event's own timezone. */
+function salesOpenText(iso: string, timeZone: string) {
+  const d = new Date(iso);
+  const day = new Intl.DateTimeFormat("en-GB", { timeZone, weekday: "short", day: "numeric", month: "short" }).format(d);
+  const t = new Intl.DateTimeFormat("en-GB", { timeZone, hour: "numeric", minute: "2-digit", hour12: true })
+    .format(d)
+    .toUpperCase();
+  return `${day.replace(",", "")}, ${t}`;
+}
+
+/**
+ * Time left until sales open. Client-only (the server can't know the
+ * viewer's "now" at render time), so it renders nothing until mounted.
+ * MOCK: the real page should use the server time from the API, like the
+ * hold timer does, so a wrong phone clock can't show the wrong countdown.
+ */
+function Countdown({ to }: { to: string }) {
+  const [left, setLeft] = useState<number | null>(null);
+  useEffect(() => {
+    const tick = () => setLeft(Math.max(0, new Date(to).getTime() - Date.now()));
+    const first = setTimeout(tick, 0);
+    const id = setInterval(tick, 1000);
+    return () => {
+      clearTimeout(first);
+      clearInterval(id);
+    };
+  }, [to]);
+  if (left === null) return null;
+  if (left === 0) return <span>Opening now. Refresh the page.</span>;
+  const s = Math.floor(left / 1000);
+  const d = Math.floor(s / 86400);
+  const h = Math.floor((s % 86400) / 3600);
+  const mm = Math.floor((s % 3600) / 60);
+  const ss = s % 60;
+  const text = d > 0 ? `${d}d ${h}h ${mm}m` : `${h}h ${String(mm).padStart(2, "0")}m ${String(ss).padStart(2, "0")}s`;
+  return <span className="tabular">Opens in {text}</span>;
+}
+
+const noticeStyle = {
+  rescheduled: { icon: CalendarClock, box: "border-info/30 bg-info-soft text-info-fg" },
+  "venue-changed": { icon: MapPinned, box: "border-info/30 bg-info-soft text-info-fg" },
+  cancelled: { icon: CalendarX2, box: "border-danger/30 bg-danger-soft text-danger-fg" },
+} as const;
+
+/** Organiser announcement shown at the top of the event page. */
+export function EventNoticeBanner({ notice }: { notice: EventNotice }) {
+  const st = noticeStyle[notice.kind];
+  return (
+    <div role={notice.kind === "cancelled" ? "alert" : "status"} className={cn("flex gap-3 rounded-lg border p-4 md:p-5", st.box)}>
+      <st.icon className="mt-0.5 size-5 shrink-0" aria-hidden />
+      <div>
+        <p className="text-h3">{notice.title}</p>
+        <p className="mt-1 text-small">{notice.body}</p>
+      </div>
+    </div>
+  );
+}
 
 /**
  * Ticket selection for an event page: the ticket list (left column), the
@@ -62,11 +127,19 @@ export function TicketPurchase({
   const [qty, setQty] = useState<Record<string, number>>({});
   const [nudge, setNudge] = useState(false);
   const [mockNote, setMockNote] = useState(false);
+  const [remind, setRemind] = useState(false);
   const shake = useAnimationControls();
+  const online = useOnline();
 
   const seated = event.seating === "assigned";
   const soldOut = event.status === "Sold out" || event.ticketTypes.every((t) => t.remaining === 0);
   const free = event.ticketTypes.every((t) => t.price.amountMinor === 0);
+  // Lifecycle: the server refuses holds in all of these too (see docs/edge-cases.md).
+  const cancelled = event.status === "Cancelled" || event.notice?.kind === "cancelled";
+  const upcoming = !cancelled && event.salesState === "upcoming";
+  const closed = !cancelled && !upcoming && event.salesState === "closed";
+  const unavailableNow = cancelled || upcoming || closed || soldOut;
+  const orderMax = event.maxTicketsPerOrder;
 
   // Integer minor units throughout: no floating-point money.
   const lines = event.ticketTypes
@@ -91,6 +164,7 @@ export function TicketPurchase({
   const ctaLabel = free ? "Reserve tickets" : "Continue to checkout";
 
   const onContinue = () => {
+    if (!online) return; // the offline note explains why
     if (count === 0) {
       // Respond to the tap instead of disabling the button.
       setNudge(true);
@@ -109,7 +183,7 @@ export function TicketPurchase({
         <h2 id="tickets-title" className="text-h1">
           Tickets
         </h2>
-        {seated && !soldOut && (
+        {seated && !unavailableNow && (
           <span className="inline-flex items-center gap-1.5 text-small text-fg-muted">
             <Armchair className="size-4" aria-hidden />
             Assigned seating
@@ -121,8 +195,16 @@ export function TicketPurchase({
         {event.ticketTypes.map((t) => {
           const a = availability(t);
           const n = qty[t.id] ?? 0;
-          const unavailable = t.remaining === 0;
-          const max = Math.min(t.maxPerOrder, t.remaining ?? t.maxPerOrder);
+          const unavailable = t.remaining === 0 || unavailableNow;
+          // Never more than the type allows, what's left, or what the order has room for.
+          const roomInOrder = orderMax - (count - n);
+          const max = Math.max(0, Math.min(t.maxPerOrder, t.remaining ?? t.maxPerOrder, roomInOrder));
+          const limitText =
+            t.remaining !== null && t.remaining <= Math.min(t.maxPerOrder, roomInOrder)
+              ? `Only ${t.remaining} left`
+              : roomInOrder < t.maxPerOrder
+                ? `Up to ${orderMax} tickets per order in total`
+                : `Up to ${t.maxPerOrder} per order`;
           return (
             <m.li
               key={t.id}
@@ -130,7 +212,7 @@ export function TicketPurchase({
               className={cn(
                 "relative rounded-lg border bg-surface p-4 transition-colors md:p-5",
                 n > 0 ? "border-primary bg-primary-soft/40 dark:bg-primary-soft/30" : "border-line",
-                unavailable && "opacity-70",
+                t.remaining === 0 && "opacity-70",
               )}
             >
               <div className="flex flex-col gap-4 sm:flex-row sm:items-start">
@@ -149,10 +231,12 @@ export function TicketPurchase({
                       </li>
                     ))}
                   </ul>
-                  <p className={cn("mt-3 inline-flex items-center gap-1.5 text-small font-semibold", toneClass[a.tone])}>
-                    <a.icon className="size-4" aria-hidden />
-                    {a.text}
-                  </p>
+                  {!cancelled && !closed && (
+                    <p className={cn("mt-3 inline-flex items-center gap-1.5 text-small font-semibold", toneClass[a.tone])}>
+                      <a.icon className="size-4" aria-hidden />
+                      {upcoming && t.remaining !== 0 ? "On sale soon" : a.text}
+                    </p>
+                  )}
                 </div>
 
                 <div className="flex items-center justify-between gap-5 sm:flex-col sm:items-end sm:justify-start">
@@ -179,9 +263,7 @@ export function TicketPurchase({
                   >
                     <span className="mt-3 flex items-center gap-1.5">
                       <Info className="size-3.5" aria-hidden />
-                      {t.remaining !== null && t.remaining < t.maxPerOrder
-                        ? `Only ${t.remaining} left`
-                        : `Up to ${t.maxPerOrder} per order`}
+                      {limitText}
                     </span>
                   </m.p>
                 )}
@@ -191,17 +273,102 @@ export function TicketPurchase({
         })}
       </ul>
 
-      {seated && !soldOut && (
+      {!unavailableNow && (
         <p className="mt-4 flex items-start gap-2 text-small text-fg-muted">
           <Info className="mt-0.5 size-4 shrink-0" aria-hidden />
-          Choose your seats on the map. Prices depend on where you sit.
+          {seated
+            ? `Choose your seats on the map. Prices depend on where you sit. Up to ${orderMax} seats per order.`
+            : `Up to ${orderMax} tickets per order.`}
         </p>
       )}
     </section>
   );
 
   /* ---------- Purchase panel (desktop) ---------- */
-  const panelBody = soldOut ? (
+  const offlineNote = !online && !unavailableNow && (
+    <p role="status" className="mt-3 flex items-start gap-2 rounded-sm bg-warning-soft p-2.5 text-caption text-warning-fg">
+      <WifiOff className="mt-0.5 size-3.5 shrink-0" aria-hidden />
+      You&apos;re offline. You can look around, but tickets can only be bought while you&apos;re connected.
+    </p>
+  );
+
+  const stateBlock = (icon: React.ReactNode, title: string, body: React.ReactNode, action?: React.ReactNode) => (
+    <div className="text-center">
+      {icon}
+      <p className="mt-3 text-h3">{title}</p>
+      <div className="mt-1 text-small text-fg-muted">{body}</div>
+      {action}
+    </div>
+  );
+
+  const similarLink = (
+    <Link href="#more" className="mt-5 inline-flex h-11 items-center gap-2 font-semibold text-primary-ink">
+      See similar events <ArrowRight className="size-4" aria-hidden />
+    </Link>
+  );
+
+  const panelBody = cancelled ? (
+    stateBlock(
+      <CalendarX2 className="mx-auto size-8 text-danger" aria-hidden />,
+      "Event cancelled",
+      "Tickets can't be bought. If you already have tickets, your refund is on its way automatically.",
+      <div className="mt-5 grid justify-items-center gap-1">
+        {/* MOCK: Find my tickets is a later screen (phone number + OTP). */}
+        <Button variant="secondary" className="w-full" onClick={() => setMockNote(true)} icon={<Ticket className="size-5" />}>
+          Find my tickets
+        </Button>
+        {mockNote && (
+          <p role="status" className="mt-2 rounded-sm bg-info-soft p-2.5 text-caption text-info-fg">
+            Design preview: finding tickets by phone number is built in a later step.
+          </p>
+        )}
+        {similarLink}
+      </div>,
+    )
+  ) : upcoming && event.salesStartsAt ? (
+    stateBlock(
+      <CalendarClock className="mx-auto size-8 text-primary-ink" aria-hidden />,
+      `On sale ${salesOpenText(event.salesStartsAt, event.timeZone)}`,
+      <>
+        <p>Tickets aren&apos;t on sale yet.</p>
+        <p className="mt-1 font-semibold text-fg">
+          <Countdown to={event.salesStartsAt} />
+        </p>
+      </>,
+      <div className="mt-5">
+        <Button
+          variant={remind ? "secondary" : "primary"}
+          className="w-full"
+          onClick={() => setRemind((r) => !r)}
+          icon={remind ? <BellRing className="size-5" /> : <Bell className="size-5" />}
+          aria-pressed={remind}
+        >
+          {remind ? "Reminder set" : "Remind me"}
+        </Button>
+        <AnimatePresence>
+          {remind && (
+            <m.p
+              initial={{ opacity: 0, height: 0 }}
+              animate={{ opacity: 1, height: "auto" }}
+              exit={{ opacity: 0, height: 0 }}
+              className="overflow-hidden text-caption text-fg-muted"
+              role="status"
+            >
+              {/* MOCK: the real reminder asks for a phone number and sends an SMS. */}
+              <span className="mt-3 block">Design preview: we&apos;ll text you when sales open.</span>
+            </m.p>
+          )}
+        </AnimatePresence>
+      </div>,
+    )
+  ) : closed ? (
+    stateBlock(
+      <Ban className="mx-auto size-8 text-fg-muted" aria-hidden />,
+      "Ticket sales have ended",
+      "Online sales for this event are closed. The organiser may sell at the door.",
+      similarLink,
+    )
+  ) : soldOut ? (
     <div className="text-center">
       <Ban className="mx-auto size-8 text-danger" aria-hidden />
       <p className="mt-3 text-h3">Sold out</p>
@@ -291,18 +458,21 @@ export function TicketPurchase({
         </div>
       )}
 
+      {offlineNote}
+
       <m.div animate={shake} className="mt-5">
         {seated ? (
           <Link
             href={`/events/${event.slug}/seats`}
             transitionTypes={["nav-forward"]}
+            prefetch
             className="inline-flex h-13 w-full items-center justify-center gap-2 rounded-md bg-primary px-6 text-body-lg font-semibold text-primary-fg shadow-e1 transition-colors hover:bg-primary-hover"
           >
             <Armchair className="size-5" aria-hidden />
             Choose your seats
           </Link>
         ) : (
-          <Button size="lg" className="w-full" onClick={onContinue} icon={<ArrowRight className="size-5" />}>
+          <Button size="lg" className="w-full" onClick={onContinue} disabled={!online} icon={<ArrowRight className="size-5" />}>
             {ctaLabel}
           </Button>
         )}
@@ -345,6 +515,11 @@ export function TicketPurchase({
     <>
       <div className="mx-auto grid max-w-7xl gap-10 px-4 pt-10 pb-32 md:px-8 lg:grid-cols-[minmax(0,1fr)_23rem] lg:gap-14 lg:pb-20">
         <div className="grid min-w-0 content-start gap-14">
+          {event.notice && <EventNoticeBanner notice={event.notice} />}
+          {/* Phones have no side panel, so the sale state shows here instead of the bottom bar. */}
+          {unavailableNow && (
+            <div className="rounded-lg border border-line bg-surface-raised p-6 shadow-e1 lg:hidden">{panelBody}</div>
+          )}
           {before}
           {ticketList}
           {after}
@@ -358,8 +533,14 @@ export function TicketPurchase({
       </div>
 
       {/* ---------- Bottom bar (phones and tablets) ---------- */}
-      {!soldOut && (
+      {!unavailableNow && (
         <div className="glass fixed inset-x-0 bottom-0 z-40 border-t border-line pb-[env(safe-area-inset-bottom)] lg:hidden">
+          {!online && (
+            <p role="status" className="mx-auto flex max-w-3xl items-center gap-2 px-4 pt-3 text-caption font-semibold text-warning">
+              <WifiOff className="size-3.5 shrink-0" aria-hidden />
+              You&apos;re offline. Reconnect to buy tickets.
+            </p>
+          )}
           <AnimatePresence>
             {mockNote && (
               <m.p
@@ -402,7 +583,7 @@ export function TicketPurchase({
                 Choose seats
               </Link>
             ) : (
-              <Button onClick={onContinue} className="h-12">
+              <Button onClick={onContinue} className="h-12" disabled={!online}>
                 {count === 0 ? "Get tickets" : free ? "Reserve" : "Continue"}
               </Button>
             )}
