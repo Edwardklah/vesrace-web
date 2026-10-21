@@ -14,6 +14,9 @@ export type ApiErrorCode =
   | "EVENT_CANCELLED"
   | "HOLD_EXPIRED"
   | "RATE_LIMITED" // too many attempts in a short time
+  | "CODE_WRONG" // the verification code doesn't match
+  | "CODE_EXPIRED" // the code is too old or was replaced by a newer one
+  | "CODE_LOCKED" // too many wrong tries for this code
   | "OFFLINE" // the device has no connection
   | "NETWORK" // the request failed or timed out
   | "UNKNOWN";
@@ -21,7 +24,7 @@ export type ApiErrorCode =
 export class ApiError extends Error {
   constructor(
     public code: ApiErrorCode,
-    public details: { limit?: number; ticketType?: string; retryAfterSeconds?: number; remaining?: number } = {},
+    public details: { limit?: number; ticketType?: string; retryAfterSeconds?: number; remaining?: number; triesLeft?: number } = {},
   ) {
     super(code);
     this.name = "ApiError";
@@ -52,7 +55,17 @@ export function errorMessage(e: unknown): string {
     case "HOLD_EXPIRED":
       return "Your hold ran out. Choose your seats again.";
     case "RATE_LIMITED":
-      return `That was a lot of tries in a short time. Wait ${d.retryAfterSeconds ?? 10} seconds and try again.`;
+      {
+        const secs = d.retryAfterSeconds ?? 10;
+        const wait = secs > 90 ? `${Math.ceil(secs / 60)} minutes` : `${secs} seconds`;
+        return `That was a lot of tries in a short time. Wait ${wait} and try again.`;
+      }
+    case "CODE_WRONG":
+      return d.triesLeft === 1 ? "That code isn't right. You have 1 try left." : `That code isn't right. You have ${d.triesLeft} tries left.`;
+    case "CODE_EXPIRED":
+      return "That code has expired. Send a new one.";
+    case "CODE_LOCKED":
+      return "Too many wrong tries for this code. Send a new one.";
     case "OFFLINE":
       return "You're offline. Seats can only be held while you're connected.";
     case "NETWORK":

@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { AnimatePresence, m, useAnimationControls } from "motion/react";
 import {
   Armchair,
@@ -25,6 +26,8 @@ import { Seat } from "@/components/seating/seat";
 import { Button } from "@/components/ui/button";
 import { RollingNumber } from "@/components/ui/rolling-number";
 import { Stepper } from "@/components/ui/stepper";
+import { api, ApiError, errorMessage } from "@/lib/api";
+import { holdSession } from "@/lib/api/hold-session";
 import { cn } from "@/lib/cn";
 import { formatEventDate, formatMoney, formatPriceFrom, type Money } from "@/lib/format";
 import { spring } from "@/lib/motion";
@@ -126,7 +129,13 @@ export function TicketPurchase({
 }) {
   const [qty, setQty] = useState<Record<string, number>>({});
   const [nudge, setNudge] = useState(false);
-  const [mockNote, setMockNote] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const [holdError, setHoldError] = useState<string | null>(null);
+  const router = useRouter();
+  // Next.js keeps this page alive while you're on checkout, so pressing Back
+  // shows it exactly as you left it. Effects clean up when it's hidden; use
+  // that to drop the "loading" state so the button works again on return.
+  useEffect(() => () => setBusy(false), []);
   const [remind, setRemind] = useState(false);
   const shake = useAnimationControls();
   const online = useOnline();
@@ -157,14 +166,14 @@ export function TicketPurchase({
   const setQuantity = (id: string, n: number) => {
     setLastTotal(subtotal + fees);
     setNudge(false);
-    setMockNote(false);
+    setHoldError(null);
     setQty((q) => ({ ...q, [id]: n }));
   };
 
   const ctaLabel = free ? "Reserve tickets" : "Continue to checkout";
 
-  const onContinue = () => {
-    if (!online) return; // the offline note explains why
+  const onContinue = async () => {
+    if (!online || busy) return; // the offline note explains why; busy stops double taps
     if (count === 0) {
       // Respond to the tap instead of disabling the button.
       setNudge(true);
@@ -172,8 +181,25 @@ export function TicketPurchase({
       document.getElementById("tickets")?.scrollIntoView({ behavior: "smooth", block: "start" });
       return;
     }
-    // MOCK: checkout is a later phase-1 screen.
-    setMockNote(true);
+    // Reserve the tickets (the 10-minute hold starts now), then go to checkout.
+    setBusy(true);
+    setHoldError(null);
+    const quantities = Object.fromEntries(lines.map((l) => [l.t.id, l.n]));
+    try {
+      let hold;
+      try {
+        hold = await api.holds.setTickets({ eventId: event.id, holdId: holdSession.get(event.id), quantities });
+      } catch (e) {
+        // An old hold from earlier ran out: start a fresh one.
+        if (!(e instanceof ApiError && e.code === "HOLD_EXPIRED")) throw e;
+        hold = await api.holds.setTickets({ eventId: event.id, holdId: null, quantities });
+      }
+      holdSession.set(event.id, hold.id);
+      router.push(`/checkout/${event.slug}`);
+    } catch (e) {
+      setHoldError(errorMessage(e));
+      setBusy(false);
+    }
   };
 
   /* ---------- Ticket list ---------- */
@@ -313,15 +339,12 @@ export function TicketPurchase({
       "Event cancelled",
       "Tickets can't be bought. If you already have tickets, your refund is on its way automatically.",
       <div className="mt-5 grid justify-items-center gap-1">
-        {/* MOCK: Find my tickets is a later screen (phone number + OTP). */}
-        <Button variant="secondary" className="w-full" onClick={() => setMockNote(true)} icon={<Ticket className="size-5" />}>
-          Find my tickets
-        </Button>
-        {mockNote && (
-          <p role="status" className="mt-2 rounded-sm bg-info-soft p-2.5 text-caption text-info-fg">
-            Design preview: finding tickets by phone number is built in a later step.
-          </p>
-        )}
+        <Link
+          href="/tickets/find"
+          className="inline-flex h-11 w-full items-center justify-center gap-2 rounded-md border border-line-strong bg-surface px-5 font-semibold hover:bg-surface-muted"
+        >
+          <Ticket className="size-5" aria-hidden /> Find my tickets
+        </Link>
         {similarLink}
       </div>,
     )
@@ -472,24 +495,22 @@ export function TicketPurchase({
             Choose your seats
           </Link>
         ) : (
-          <Button size="lg" className="w-full" onClick={onContinue} disabled={!online} icon={<ArrowRight className="size-5" />}>
+          <Button size="lg" className="w-full" onClick={onContinue} disabled={!online} loading={busy} icon={<ArrowRight className="size-5" />}>
             {ctaLabel}
           </Button>
         )}
       </m.div>
 
       <AnimatePresence>
-        {mockNote && (
+        {holdError && (
           <m.p
             initial={{ opacity: 0, height: 0 }}
             animate={{ opacity: 1, height: "auto" }}
             exit={{ opacity: 0, height: 0 }}
-            className="overflow-hidden text-caption text-info"
-            role="status"
+            className="overflow-hidden text-caption"
+            role="alert"
           >
-            <span className="mt-3 block rounded-sm bg-info-soft p-2.5 text-info-fg">
-              Design preview: checkout is built in a later step.
-            </span>
+            <span className="mt-3 block rounded-sm bg-danger-soft p-2.5 text-danger-fg">{holdError}</span>
           </m.p>
         )}
       </AnimatePresence>
@@ -542,17 +563,15 @@ export function TicketPurchase({
             </p>
           )}
           <AnimatePresence>
-            {mockNote && (
+            {holdError && (
               <m.p
                 initial={{ opacity: 0, height: 0 }}
                 animate={{ opacity: 1, height: "auto" }}
                 exit={{ opacity: 0, height: 0 }}
-                className="overflow-hidden px-4 text-caption text-info-fg"
-                role="status"
+                className="mx-auto max-w-3xl overflow-hidden px-4 text-caption"
+                role="alert"
               >
-                <span className="mt-3 block rounded-sm bg-info-soft p-2.5">
-                  Design preview: checkout is built in a later step.
-                </span>
+                <span className="mt-3 block rounded-sm bg-danger-soft p-2.5 text-danger-fg">{holdError}</span>
               </m.p>
             )}
           </AnimatePresence>
@@ -583,7 +602,7 @@ export function TicketPurchase({
                 Choose seats
               </Link>
             ) : (
-              <Button onClick={onContinue} className="h-12" disabled={!online}>
+              <Button onClick={onContinue} className="h-12" disabled={!online} loading={busy}>
                 {count === 0 ? "Get tickets" : free ? "Reserve" : "Continue"}
               </Button>
             )}

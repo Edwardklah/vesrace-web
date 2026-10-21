@@ -27,7 +27,8 @@ export function FieldShell({ label, hint, error, optional, id, children }: Field
         {optional && <span className="font-normal text-fg-muted">Optional</span>}
       </label>
       {children}
-      <AnimatePresence initial={false} mode="popLayout">
+      {/* "wait": the hint comes back only after the error has gone, so they never overlap. */}
+      <AnimatePresence initial={false} mode="wait">
         {error ? (
           <m.p
             key="error"

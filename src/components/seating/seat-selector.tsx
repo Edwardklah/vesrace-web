@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { AnimatePresence, m, useAnimationControls } from "motion/react";
 import {
   Accessibility,
@@ -75,7 +76,7 @@ export function SeatSelector({ event, map }: { event: EventDetail; map: SeatMapD
   const [movedAway, setMovedAway] = useState(false);
   const [view, setView] = useState<"map" | "list">("map");
   const [sheetOpen, setSheetOpen] = useState(false);
-  const [mockNote, setMockNote] = useState(false);
+  const router = useRouter();
   const [nudge, setNudge] = useState(false);
   const [lastTotal, setLastTotal] = useState(0);
   const mapRef = useRef<SeatMapHandle>(null);
@@ -195,7 +196,6 @@ export function SeatSelector({ event, map }: { event: EventDetail; map: SeatMapD
 
   const before = () => {
     setLastTotal(total);
-    setMockNote(false);
     setNudge(false);
     setError(null);
   };
@@ -307,7 +307,7 @@ export function SeatSelector({ event, map }: { event: EventDetail; map: SeatMapD
       setError(errorMessage(new ApiError("OFFLINE")));
       return;
     }
-    setMockNote(true); // MOCK: checkout is built in a later step
+    router.push(`/checkout/${event.slug}`); // the hold travels with this tab (session storage)
   };
 
   /** Hold end time in this phone's clock. */
@@ -511,17 +511,6 @@ export function SeatSelector({ event, map }: { event: EventDetail; map: SeatMapD
     </m.div>
   );
 
-  const mockMsg = (
-    <AnimatePresence>
-      {mockNote && (
-        <m.p initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: "auto" }} exit={{ opacity: 0, height: 0 }} role="status" className="overflow-hidden">
-          <span className="mt-3 block rounded-sm bg-info-soft p-2.5 text-caption text-info-fg">
-            Design preview: checkout is built in a later step.
-          </span>
-        </m.p>
-      )}
-    </AnimatePresence>
-  );
 
   /* ---- Legend (the map key): price tiers, then states ----
    * Each item explains itself on hover, keyboard focus, or tap. */
@@ -742,7 +731,6 @@ export function SeatSelector({ event, map }: { event: EventDetail; map: SeatMapD
               <RollingNumber value={formatMoney(money(total), { freeLabel: false })} direction={direction} className="text-h2" />
             </div>
             {cta}
-            {mockMsg}
             <p className="mt-4 text-caption text-fg-muted">
               Seats are held for 10 minutes from your first choice. Final prices are confirmed at checkout.
             </p>
@@ -810,7 +798,6 @@ export function SeatSelector({ event, map }: { event: EventDetail; map: SeatMapD
               </Button>
             </m.div>
           </div>
-          {mockMsg}
         </div>
       </div>
 

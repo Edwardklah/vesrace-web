@@ -39,10 +39,12 @@ It's the main thing people try to abuse.
 | Tab closed or page refreshed while holding seats | The hold is **kept**, not released. Coming back to the seat page in the same browser restores it with the same timer. If nobody returns, it simply expires | Both | Built |
 | Customer clears seats on purpose | "Clear all" or removing the last seat releases them straight away | Server | Built |
 | Hold runs out mid-selection | A dialog says the seats were released and explains the 2-minute cooldown on those exact seats. Other seats can be chosen at once | Page | Built |
-| Hold runs out during payment | If MoMo approval arrives after the hold ended, the server checks whether the seats are still free. If yes, the order completes. If not, the money is refunded automatically and the customer is told clearly | Server | With checkout + Backend |
+| Hold runs out during payment | If MoMo approval arrives after the hold ended, the server checks whether the seats are still free. If yes, the order completes. If not, the money is refunded automatically and the customer is told clearly. (The mock simply shows the "time ran out" screen.) | Server | Built (page), Backend (late approvals) |
 | Phone clock is wrong | Every response includes `serverTime`. The timer uses the difference, so a phone that's minutes slow still shows the right time left | Page | Built |
 | Accessible (wheelchair) seats taken by people who don't need them | The seat panel asks people to choose them only if someone in their group needs it. Organisers can hold them back until close to the date and release them to everyone later | Both | Built (message), Backend (release rule) |
 | Standing area sells out while choosing | Refused with `ZONE_FULL`, including how many are left | Server | Built |
+
+**Payment review switches** (add to the checkout URL): `?pay=decline`, `?pay=funds`, `?pay=timeout`. Without one, the MoMo prompt is approved after about 7 seconds.
 
 **Review switches** (add to the seat page URL, mock only):
 `?hold=30` short hold, `?simulate=taken` next seat is taken by someone else,
@@ -61,17 +63,17 @@ It's the main thing people try to abuse.
 | Rescheduled | Blue notice with the new date. Card shows "Rescheduled". Existing tickets stay valid; refunds allowed until the old date | Both | Built (display), Backend (refunds) |
 | Venue changed | Blue notice with the new venue (same component, `venue-changed`) | Page | Built (component); no sample event uses it yet |
 | Event already happened | Card and page show "Ended". Tickets can't be bought; ticket holders still see their ticket | Both | With event lifecycle job |
-| Prices change while someone is choosing | The page total is a preview. Checkout asks the server to price the order and shows that figure before payment | Server | With checkout |
+| Prices change while someone is choosing | The event-page total is a preview. Checkout shows the server's quote (lines, booking fee, total) before payment | Server | Built (mock quote) |
 
 ## 3. Payments (MoMo and card)
 
 | Situation | What happens | Who | Status |
 | --- | --- | --- | --- |
-| Customer never approves the MoMo prompt | Waiting screen with the hold timer. After 2 minutes, offer "Resend prompt" and "Use another number". When the hold ends, the order is cancelled | Both | With MoMo waiting screen |
-| Wrong number typed | Number is shown back with the network ("MTN · 024 123 4567") before sending. Network is detected from the prefix | Page | With checkout |
-| Not enough balance / prompt declined | Plain message from the provider's code, with "Try again" or "Pay another way". Hold time keeps running | Both | With checkout |
+| Customer never approves the MoMo prompt | Waiting screen with the hold timer, a 2-minute prompt countdown, "No prompt on your phone?" help, "Resend prompt" after 30 seconds, "Use a different number" and "Cancel payment". If it expires: "We didn't get an approval", nothing taken, send a new prompt | Both | Built (mock) |
+| Wrong number typed | Number is validated (10 digits, Ghana prefix) and shown back on the payment step ("Pay from 024 412 3456"); the network is picked from the prefix and can be changed | Page | Built |
+| Not enough balance / prompt declined | Plain message for each ("Payment declined", "Not enough money in this wallet"), nothing taken, with "Send a new prompt" or "Pay another way". Hold time keeps running | Both | Built (mock) |
 | Payment approved but the page lost connection | The server finishes the order from the provider's callback, not the page. The customer gets the ticket by SMS and in Find my tickets | Server | Backend |
-| Paying twice (double tap, two tabs, retry) | Every payment attempt carries an idempotency key tied to the hold. The server accepts only one successful payment per hold and refunds any duplicate | Server | Backend |
+| Paying twice (double tap, two tabs, retry) | Every payment attempt carries an idempotency key tied to the hold. The server accepts only one successful payment per hold and refunds any duplicate | Server | Built (page sends the key; mock honours it), Backend |
 | Provider callback arrives late, twice or out of order | Callbacks are verified (signature), stored and processed once. Order state only moves forward | Server | Backend |
 | Approved after the hold ended | See section 1: complete if seats are still free, otherwise automatic refund | Server | Backend |
 | Chargebacks / stolen cards | Card payments go through 3-D Secure. Tickets on disputed payments are cancelled and can't be scanned | Server | Backend |
@@ -85,7 +87,7 @@ It's the main thing people try to abuse.
 | Rotating QR to stop screenshots | The ticket page shows a code that changes every 30 seconds when online. Offline it falls back to the static signed code | Both | With issued ticket screen |
 | Fake or edited QR | Signature fails, scanner shows "Not a valid Vesrace ticket" | Server | With scanner |
 | No signal at the gate | Scanners download the guest list beforehand and check signatures offline, then sync. Two offline scanners could both admit one copy; sync flags it for the organiser | Both | With scanner |
-| Customer lost their phone | Find my tickets by phone number + OTP from any device. The organiser can also look them up by name or number at the door | Both | With Find my tickets |
+| Customer lost their phone | Find my tickets (`/tickets/find`) by phone number or email + a 6-digit code, from any device. Results split into Upcoming and Past. The organiser can also look them up by name or number at the door | Both | Built (mock; code is 123456), Backend (door lookup) |
 | Ticket for the wrong event or date | Scanner shows the event name and date it belongs to, in red | Server | With scanner |
 | Refunded or cancelled ticket scanned | "Refunded: not valid" | Server | With scanner |
 
@@ -101,10 +103,11 @@ It's the main thing people try to abuse.
 
 | Situation | What happens | Who | Status |
 | --- | --- | --- | --- |
-| OTP bombing (requesting codes to someone else's number) | Limit per number and per device (e.g. 3 per 10 minutes), with a growing wait | Server | Backend |
-| Guessing OTP codes | 5 wrong tries locks that code; a new one must be requested | Server | Backend |
+| OTP bombing (requesting codes to someone else's number) | 3 codes per number/email per 10 minutes and one per 30 seconds; the page shows the wait. Also limited per device on the server | Server | Built (mock), Backend (per device) |
+| Guessing OTP codes | Tries left are shown; 5 wrong tries locks that code and a new one must be sent. A new code replaces the old one, and codes last 10 minutes | Server | Built (mock) |
+| Checking which numbers bought tickets | The lookup never says whether a number has orders until the code is entered, so it can't be used to probe numbers | Server | Built (mock) |
 | SIM swap / number recycled | Changing the number on an account needs the old number or support. Large purchases on a recently changed number get extra checks | Server | Backend |
-| Checking out without an account | Allowed with a phone number. Tickets are linked to that number and can be claimed later | Both | With checkout |
+| Checking out without an account | Allowed with a phone number. Tickets are linked to that number and can be claimed later | Both | Built (guest checkout) |
 
 ## 7. Organisers and staff
 
@@ -147,7 +150,7 @@ It's the main thing people try to abuse.
 
 | Situation | What happens | Who | Status |
 | --- | --- | --- | --- |
-| Phone numbers in URLs or logs | Never in URLs. Masked in logs and on screen (024 ••• 4567) | Both | With checkout |
+| Phone numbers in URLs or logs | Never in URLs. Masked on screen after payment (024 ••• 4567); the server only sends masked numbers back | Both | Built (page), Backend (logs) |
 | Organiser exports of customer data | Only what's needed for entry (name, ticket, number masked unless the customer opted in to marketing) | Server | With dashboard |
 | Shared or public computer | Hold ids live in session storage only (cleared when the browser closes). No card details are stored by Vesrace | Page | Built |
 

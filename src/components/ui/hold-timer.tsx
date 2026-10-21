@@ -17,11 +17,14 @@ export function HoldTimer({
   onExpire,
   className,
   compact = false,
+  label = "Seats held for you",
 }: {
   expiresAt: number;
   onExpire: () => void;
   className?: string;
   compact?: boolean;
+  /** What's being held, e.g. "Tickets held for you". */
+  label?: string;
 }) {
   const [now, setNow] = useState(() => Date.now());
   const fired = useRef(false);
@@ -59,7 +62,7 @@ export function HoldTimer({
         <Timer className="size-4 shrink-0" aria-hidden />
       )}
       <span className="flex-1 text-small font-semibold">
-        {warn ? (compact ? "Hurry" : "Less than 2 minutes left") : compact ? "Held" : "Seats held for you"}
+        {warn ? (compact ? "Hurry" : "Less than 2 minutes left") : compact ? "Held" : label}
       </span>
       <RollingNumber value={`${mm}:${ss}`} direction={-1} live={false} className="text-body font-bold" />
       {/* Announce only the important moment, not every second. */}

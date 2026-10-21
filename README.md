@@ -101,6 +101,12 @@ Helpers:
 | `?state=loading` | The loading skeleton |
 | `?role=manager` | An event manager: no Payouts, Team or Settings, no payout details |
 
+## Checkout and tickets
+
+Event page or seat map → `/checkout/[event]` (tickets, your details, payment, with the hold timer in the header) → `/orders/[ref]` (confirmation and tickets with QR codes).
+
+Payment is a mock that behaves like mobile money: the prompt is approved after about 7 seconds. Review switches on the checkout URL: `?pay=decline`, `?pay=funds`, `?pay=timeout`. Add `?hold=20` to the event page URL before continuing to see the "time ran out" screen. QR codes are drawn with `uqr` (small, no dependencies) from a credential the server sends; the page never makes its own.
+
 ## Edge cases
 
 `docs/edge-cases.md` lists how abuse and failure cases are handled (holds, payments, scanning, lifecycle and more), who enforces each one, and the proposed backend rules and error codes.
@@ -111,4 +117,4 @@ Helpers:
 2. ~~Event detail with ticket selection~~
 3. ~~Seat selection~~
 4. ~~Organiser dashboard overview~~
-5. Mobile checkout, MoMo waiting state and issued ticket
+5. ~~Mobile checkout, MoMo waiting state and issued ticket~~

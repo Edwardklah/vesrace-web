@@ -24,8 +24,10 @@ export interface Hold {
   id: string;
   eventId: string;
   seatIds: string[];
-  /** Standing / general admission quantities by zone id. */
+  /** Standing-area quantities by zone id (seated events). */
   zones: Record<string, number>;
+  /** General admission quantities by ticket type id. */
+  tickets: Record<string, number>;
   /** When the hold ends, in the server's clock (epoch ms). */
   expiresAt: number;
   /** The server's clock when it answered, so the page can correct for a wrong phone clock. */
@@ -37,6 +39,8 @@ export interface HoldsApi {
   addSeat(input: { eventId: string; holdId: string | null; seatId: string }): Promise<Hold>;
   removeSeat(input: { holdId: string; seatId: string }): Promise<Hold>;
   setZone(input: { eventId: string; holdId: string | null; zoneId: string; quantity: number }): Promise<Hold>;
+  /** General admission: set every ticket type's quantity at once (0 removes it). */
+  setTickets(input: { eventId: string; holdId: string | null; quantities: Record<string, number> }): Promise<Hold>;
   release(holdId: string): Promise<void>;
 }
 
@@ -45,7 +49,7 @@ export type HoldBroadcast = { type: "hold-replaced" | "hold-released"; eventId: 
 export const HOLD_CHANNEL = "vesrace-holds";
 
 /* ======================================================================
- * MOCK SERVER
+ * MOCK SERVER (shared with the mock checkout in ./checkout.ts)
  * ==================================================================== */
 
 const STORE_KEY = "vesrace-mock-holds";
@@ -60,6 +64,8 @@ interface Store {
   holds: Record<string, HoldRecord>;
   cooldowns: Record<string, number>; // seatId -> until (ms)
   calls: number[];
+  /** Seats bought through the mock checkout. */
+  sold: string[];
 }
 
 function param(name: string) {
@@ -75,11 +81,16 @@ function param(name: string) {
 function load(): Store {
   try {
     const raw = localStorage.getItem(STORE_KEY);
-    if (raw) return JSON.parse(raw) as Store;
+    if (raw) {
+      const s = JSON.parse(raw) as Partial<Store>;
+      // Fill in fields added after a review browser first saved the store.
+      const holds = Object.fromEntries(Object.entries(s.holds ?? {}).map(([k, h]) => [k, { ...h, tickets: h.tickets ?? {} }]));
+      return { holds, cooldowns: s.cooldowns ?? {}, calls: s.calls ?? [], sold: s.sold ?? [] };
+    }
   } catch {
     /* storage unavailable: start empty */
   }
-  return { holds: {}, cooldowns: {}, calls: [] };
+  return { holds: {}, cooldowns: {}, calls: [], sold: [] };
 }
 function save(s: Store) {
   try {
@@ -146,18 +157,19 @@ function holdFor(store: Store, eventId: string, holdId: string | null, now: numb
     }
   }
   const secs = Number(param("hold")) > 0 ? Number(param("hold")) : HOLD_SECONDS;
-  const h: HoldRecord = { id: `hold_${now.toString(36)}`, eventId, seatIds: [], zones: {}, expiresAt: now + secs * 1000 };
+  const h: HoldRecord = { id: `hold_${now.toString(36)}`, eventId, seatIds: [], zones: {}, tickets: {}, expiresAt: now + secs * 1000 };
   store.holds[h.id] = h;
   return h;
 }
 
 function countTickets(h: HoldRecord) {
-  return h.seatIds.length + Object.values(h.zones).reduce((a, b) => a + b, 0);
+  const sum = (r: Record<string, number>) => Object.values(r).reduce((a, b) => a + b, 0);
+  return h.seatIds.length + sum(h.zones) + sum(h.tickets);
 }
 
 function typeCount(h: HoldRecord, ticketTypeId: string) {
   const map = getSeatMap(h.eventId);
-  if (!map) return 0;
+  if (!map) return h.tickets[ticketTypeId] ?? 0;
   const seatTypes = new Map(map.sections.flatMap((s) => s.rows.flatMap((r) => r.seats.map((x) => [x.id, x.ticketTypeId] as const))));
   const fromSeats = h.seatIds.filter((id) => seatTypes.get(id) === ticketTypeId).length;
   const fromZones = map.zones.filter((z) => z.ticketTypeId === ticketTypeId).reduce((n, z) => n + (h.zones[z.id] ?? 0), 0);
@@ -166,7 +178,7 @@ function typeCount(h: HoldRecord, ticketTypeId: string) {
 
 const done = (store: Store, h: HoldRecord, now: number): Hold => {
   save(store);
-  return { ...h, seatIds: [...h.seatIds], zones: { ...h.zones }, serverTime: now };
+  return { ...h, seatIds: [...h.seatIds], zones: { ...h.zones }, tickets: { ...h.tickets }, serverTime: now };
 };
 
 export const mockHolds: HoldsApi = {
@@ -190,7 +202,7 @@ export const mockHolds: HoldsApi = {
       save(store);
       throw new ApiError("SEAT_TAKEN");
     }
-    if (seat.state !== "available") throw new ApiError("SEAT_TAKEN");
+    if (seat.state !== "available" || store.sold.includes(seatId)) throw new ApiError("SEAT_TAKEN");
     if (store.cooldowns[seatId]) {
       save(store);
       throw new ApiError("COOLDOWN", { retryAfterSeconds: Math.ceil((store.cooldowns[seatId] - now) / 1000) });
@@ -198,7 +210,7 @@ export const mockHolds: HoldsApi = {
     // Another of this customer's holds (another tab) already has it.
     const existing = holdId ? store.holds[holdId] : null;
     const tt = event.ticketTypes.find((t) => t.id === seat.ticketTypeId)!;
-    const probe: HoldRecord = existing ?? { id: "", eventId, seatIds: [], zones: {}, expiresAt: 0 };
+    const probe: HoldRecord = existing ?? { id: "", eventId, seatIds: [], zones: {}, tickets: {}, expiresAt: 0 };
     if (typeCount(probe, tt.id) + 1 > tt.maxPerOrder) throw new ApiError("LIMIT_PER_TYPE", { limit: tt.maxPerOrder, ticketType: tt.name });
     if (countTickets(probe) + 1 > event.maxTicketsPerOrder) throw new ApiError("LIMIT_PER_ORDER", { limit: event.maxTicketsPerOrder });
 
@@ -226,7 +238,7 @@ export const mockHolds: HoldsApi = {
     if (!zone) throw new ApiError("UNKNOWN");
     if (quantity > zone.remaining) throw new ApiError("ZONE_FULL", { remaining: zone.remaining });
     const existing = holdId ? store.holds[holdId] : null;
-    const probe: HoldRecord = { ...(existing ?? { id: "", eventId, seatIds: [], zones: {}, expiresAt: 0 }) };
+    const probe: HoldRecord = { ...(existing ?? { id: "", eventId, seatIds: [], zones: {}, tickets: {}, expiresAt: 0 }) };
     probe.zones = { ...probe.zones, [zoneId]: quantity };
     const tt = event.ticketTypes.find((t) => t.id === zone.ticketTypeId)!;
     if (typeCount(probe, tt.id) > tt.maxPerOrder) throw new ApiError("LIMIT_PER_TYPE", { limit: tt.maxPerOrder, ticketType: tt.name });
@@ -234,6 +246,24 @@ export const mockHolds: HoldsApi = {
     const h = holdFor(store, eventId, holdId, now);
     if (quantity > 0) h.zones[zoneId] = quantity;
     else delete h.zones[zoneId];
+    return done(store, h, now);
+  },
+
+  async setTickets({ eventId, holdId, quantities }) {
+    const store = load();
+    const now = await begin(store);
+    const event = checkEvent(eventId);
+    const wanted = Object.fromEntries(Object.entries(quantities).filter(([, n]) => n > 0));
+    for (const [ttId, n] of Object.entries(wanted)) {
+      const tt = event.ticketTypes.find((t) => t.id === ttId);
+      if (!tt) throw new ApiError("UNKNOWN");
+      if (tt.remaining !== null && n > tt.remaining) throw new ApiError("ZONE_FULL", { remaining: tt.remaining });
+      if (n > tt.maxPerOrder) throw new ApiError("LIMIT_PER_TYPE", { limit: tt.maxPerOrder, ticketType: tt.name });
+    }
+    const total = Object.values(wanted).reduce((a, b) => a + b, 0);
+    if (total > event.maxTicketsPerOrder) throw new ApiError("LIMIT_PER_ORDER", { limit: event.maxTicketsPerOrder });
+    const h = holdFor(store, eventId, holdId, now);
+    h.tickets = wanted;
     return done(store, h, now);
   },
 
@@ -248,3 +278,8 @@ export const mockHolds: HoldsApi = {
     save(store);
   },
 };
+
+/** MOCK internals the mock checkout needs (the real server keeps these private). */
+export const mockServer = { load, save, begin, serverNow, checkEvent, param };
+export type MockStore = Store;
+export type MockHold = HoldRecord;
