@@ -89,10 +89,26 @@ Helpers:
 - **Payment provider.** None is named in the UI until it's decided.
 - **Price tier colours** on seats (VIP violet, Regular teal, Student orange) are proposals.
 
+- **Dashboard figures** come from `src/data/sample-dashboard.ts` (organiser: Coastline Live). They're generated from tickets sold per ticket type, so the cards, chart, event rows and paid orders all add up. Harmattan Sounds Live matches its public seat map. The Vesrace fee (3%) is a placeholder.
+
+## Organiser dashboard
+
+`/dashboard` is the overview. The other sidebar sections open a placeholder until they're designed. Review switches (add to the URL):
+
+| Switch | Shows |
+| --- | --- |
+| `?state=empty` | A new organiser with no events (first-run steps) |
+| `?state=loading` | The loading skeleton |
+| `?role=manager` | An event manager: no Payouts, Team or Settings, no payout details |
+
+## Edge cases
+
+`docs/edge-cases.md` lists how abuse and failure cases are handled (holds, payments, scanning, lifecycle and more), who enforces each one, and the proposed backend rules and error codes.
+
 ## Next phase 1 steps
 
-1. Homepage and discovery
-2. Event detail with ticket selection
-3. Seat selection
-4. Organiser dashboard overview
+1. ~~Homepage and discovery~~
+2. ~~Event detail with ticket selection~~
+3. ~~Seat selection~~
+4. ~~Organiser dashboard overview~~
 5. Mobile checkout, MoMo waiting state and issued ticket

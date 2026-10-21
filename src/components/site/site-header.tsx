@@ -44,7 +44,7 @@ export function SiteHeader({ overHero = false }: { overHero?: boolean }) {
           <Link href="/#discover" className="rounded-full px-3.5 py-2 text-small font-semibold opacity-85 hover:opacity-100">
             Browse events
           </Link>
-          <Link href="/style-guide" className="rounded-full px-3.5 py-2 text-small font-semibold opacity-85 hover:opacity-100">
+          <Link href="/dashboard" className="rounded-full px-3.5 py-2 text-small font-semibold opacity-85 hover:opacity-100">
             For organisers
           </Link>
         </nav>

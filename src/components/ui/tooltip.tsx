@@ -25,7 +25,7 @@ export function Tooltip({
 }: {
   content: React.ReactNode;
   children: React.ReactNode;
-  side?: "top" | "bottom" | "left";
+  side?: "top" | "bottom" | "left" | "right";
   className?: string;
   /** The child is already a button: wrap it without adding another one. */
   asChild?: boolean;
@@ -36,7 +36,7 @@ export function Tooltip({
   const triggerRef = useRef<HTMLSpanElement>(null);
   const tipRef = useRef<HTMLDivElement>(null);
   const [open, setOpen] = useState(false);
-  const [pos, setPos] = useState<{ x: number; y: number; placed: "top" | "bottom" | "left" } | null>(null);
+  const [pos, setPos] = useState<{ x: number; y: number; placed: "top" | "bottom" | "left" | "right" } | null>(null);
   const timer = useRef<number | undefined>(undefined);
 
   const show = (delay = 0) => {
@@ -63,7 +63,12 @@ export function Tooltip({
       y = t.top + t.height / 2 - tip.height / 2;
       if (x < margin) placed = "bottom";
     }
-    if (placed !== "left") {
+    if (side === "right") {
+      x = t.right + gap;
+      y = t.top + t.height / 2 - tip.height / 2;
+      if (x + tip.width > window.innerWidth - margin) placed = "bottom";
+    }
+    if (placed !== "left" && placed !== "right") {
       x = t.left + t.width / 2 - tip.width / 2;
       y = placed === "bottom" ? t.bottom + gap : t.top - tip.height - gap;
       if (placed === "bottom" && y + tip.height > window.innerHeight - margin) {
